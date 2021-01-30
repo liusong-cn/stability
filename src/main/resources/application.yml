@@ -22,3 +22,7 @@ mybatis:
   type-aliases-package: com.bz
   mapper-locations: classpath:mapper/*Mapper.xml
   config-location: classpath:mybatis-config.xml
+
+# elasticsearch地址
+elasticsearch:
+  hosts: 10.80.10.16:9200

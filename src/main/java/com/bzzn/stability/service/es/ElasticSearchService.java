@@ -3,12 +3,15 @@ package com.bzzn.stability.service.es;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.bzzn.stability.dto.es.DocumentPageInfo;
+import com.bzzn.stability.dto.es.IndexCreateDTO;
 import com.bzzn.stability.dto.es.UpdateDocument;
 import com.bzzn.stability.utils.PageInfo;
 import org.apache.http.HttpHost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.nio.entity.NStringEntity;
 import org.apache.http.util.EntityUtils;
+import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
@@ -90,6 +93,44 @@ public class ElasticSearchService {
         }
     }
 
+    public String createIndex(IndexCreateDTO dto) throws IOException {
+        try (RestClient client = getClient()){
+            Request request = new Request("put", dto.getIndexName());
+            JSONObject j = new JSONObject();
+            j.put("number_of_shards", dto.getShards());
+            j.put("number_of_replicas", dto.getReplicas());
+            JSONObject settings = new JSONObject();
+            settings.put("settings", j);
+            NStringEntity entity = new NStringEntity(settings.toJSONString(), ContentType.APPLICATION_JSON);
+            request.setEntity(entity);
+            Response response = client.performRequest(request);
+            return EntityUtils.toString(response.getEntity());
+        }
+    }
+
+    public String deleteIndex(String indexName) throws IOException {
+        try (RestClient client = getClient()){
+            Request request = new Request("delete", indexName);
+            Response response = client.performRequest(request);
+            return EntityUtils.toString(response.getEntity());
+        }
+    }
+
+    public String createDocument(UpdateDocument document) throws IOException {
+        try (RestClient client = getClient()){
+            String indexName = document.getIndex();
+            String docId = document.getDocId();
+            String endPoint = String.format("/%s/_create/%s", indexName, docId);
+            Request request = new Request("put",endPoint);
+            JSONObject doc = document.getDoc();
+            NStringEntity entity = new NStringEntity(doc.toJSONString(), ContentType.APPLICATION_JSON);
+            request.setEntity(entity);
+            Response response = client.performRequest(request);
+            return EntityUtils.toString(response.getEntity());
+        }
+    }
+
+
     public String updateDocument(UpdateDocument document) throws IOException {
         try (RestHighLevelClient highLevelClient = getHighLevelClient()){
             UpdateRequest request = new UpdateRequest(document.getIndex(), document.getDocId()).doc(document.getDoc());
@@ -98,6 +139,21 @@ public class ElasticSearchService {
             return response.getResult().toString();
         }
     }
+
+    public String deleteDocument(String indexName, String docId) throws IOException {
+        try (RestHighLevelClient highLevelClient = getHighLevelClient()){
+            DeleteRequest request = new DeleteRequest(indexName, docId);
+            request.setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL);
+            DeleteResponse response = highLevelClient.delete(request, RequestOptions.DEFAULT);
+            return response.getResult().toString();
+        }
+    }
+
+    public String getDocument(String indexName, String docId) throws IOException {
+        String requstStr = String.format("/%s/_source/%s", indexName, docId);
+        return getRes(requstStr, String.class);
+    }
+
 
     public DocumentPageInfo queryDocPage(int currPage, int pageSize, String index) throws IOException {
         DocumentPageInfo pageInfo = new DocumentPageInfo(currPage, pageSize);
@@ -163,8 +219,11 @@ public class ElasticSearchService {
         int startIndex = (curPage -1)*pageSize;
         int endIndex = startIndex + pageSize;
         int size = collection.size();
-        if(pageSize >= size)
-            endIndex = startIndex + size;
+        if(startIndex > size -1){
+            startIndex = endIndex = Integer.MAX_VALUE;
+        }else if(startIndex + pageSize >= size){
+            endIndex = size;
+        }
         int[] merge = new int[]{startIndex, endIndex, size};
         return merge;
     }

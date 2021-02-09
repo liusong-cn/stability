@@ -1,5 +1,6 @@
 package com.bzzn.stability.controller.es;
 
+import com.alibaba.fastjson.JSONObject;
 import com.bzzn.stability.dto.es.DocumentPageInfo;
 import com.bzzn.stability.dto.es.IndexCreateDTO;
 import com.bzzn.stability.dto.es.UpdateDocument;
@@ -16,10 +17,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.io.IOException;
+import java.util.List;
 
 /**
  * @author: ls
@@ -46,6 +50,20 @@ public class ElasticsearchController {
         return Result.success(elasticSearchService.getJSONRes(indexName));
     }
 
+    @GetMapping("/getIndexMapping")
+    @ApiOperation("索引映射")
+    public Result getIndexMapping(@RequestParam @NotBlank(message = "索引名称不能为空") String indexName){
+        return Result.success(elasticSearchService.getMapping(indexName));
+    }
+
+    @GetMapping("/queryDocument")
+    @ApiOperation("索引文档")
+    public Result<List<JSONObject>> queryDocument(@RequestParam @NotBlank(message = "索引名称不为空") String indexName,
+                                                  @RequestParam @NotBlank(message = "查询值不为空") String searchVal) throws IOException {
+        return Result.success(elasticSearchService.queryDocuments(indexName, searchVal));
+    }
+
+    //查询有问题
     @GetMapping("/getIndexDocumentPage")
     public Result<DocumentPageInfo> getIndexDocumentPage(@RequestParam(defaultValue = "1") int currPage,
                                                          @RequestParam(defaultValue = "10") int pageSize,
@@ -90,6 +108,14 @@ public class ElasticsearchController {
         return Result.success(elasticSearchService.getDocument(indexName, docId));
     }
 
+    @PostMapping("/uploadFile")
+    @ApiOperation("文档上传")
+    public Result uploadFile(@RequestParam @NotBlank(message = "索引不能为空") String indexName,
+                             @RequestParam @NotNull(message = "文件不能为空") MultipartFile file){
+
+        elasticSearchService.uploadFile(indexName, file);
+        return Result.success(null);
+    }
 
 
 

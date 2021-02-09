@@ -52,7 +52,7 @@ public class ElasticSearchService {
 
     @Value("${elasticsearch.hosts}")
     String hosts;
-    private JSONArray resMappingArray;
+
 
     RestClientBuilder getRestClientBuilder() {
         String[] hostArray = hosts.split(",");

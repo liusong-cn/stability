@@ -117,6 +117,14 @@ public class ElasticsearchController {
         return Result.success(null);
     }
 
+    @PostMapping("/bulkDocuments")
+    @ApiOperation("文档形式添加Documents")
+    public Result bulkDocuments(@RequestParam @NotBlank(message = "索引名称不为空") String indexName,
+                                @RequestParam @NotNull(message = "文件不能为空") MultipartFile file) throws IOException {
+        elasticSearchService.bulkDocuments(file, indexName);
+        return Result.success(null);
+    }
+
 
 
 }

@@ -8,14 +8,21 @@ import com.bzzn.stability.dto.es.DocumentPageInfo;
 import com.bzzn.stability.dto.es.IndexCreateDTO;
 import com.bzzn.stability.dto.es.UpdateDocument;
 import com.bzzn.stability.utils.PageInfo;
+import com.google.gson.JsonObject;
+import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.apache.http.HttpHost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.nio.entity.NStringEntity;
 import org.apache.http.util.EntityUtils;
 import org.apache.tomcat.util.http.fileupload.IOUtils;
+import org.elasticsearch.action.DocWriteRequest;
+import org.elasticsearch.action.bulk.BulkItemResponse;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.delete.DeleteResponse;
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
@@ -48,6 +55,7 @@ import java.util.Map;
  * @date: 2021/1/30 10:55
  **/
 @Service
+@Slf4j
 public class ElasticSearchService {
 
     @Value("${elasticsearch.hosts}")
@@ -254,6 +262,10 @@ public class ElasticSearchService {
     ;
 
     public void uploadFile(String indexName, MultipartFile file) {
+        getFileContent(indexName, file);
+    }
+
+    public String getFileContent(String indexName, MultipartFile file){
         String[] fileName = file.getOriginalFilename().split("\\.");
         String fileType = fileName[fileName.length - 1];
         if (!fileType.equalsIgnoreCase("json"))
@@ -268,13 +280,14 @@ public class ElasticSearchService {
             while ((inputStr = breader.readLine()) != null) {
                 buffer.append(inputStr);
             }
-            System.out.println(buffer.toString());
+            return buffer.toString();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
             IOUtils.closeQuietly(breader);
             IOUtils.closeQuietly(reader);
         }
+        return null;
     }
 
     public String getMapping(String indexName) {
@@ -319,6 +332,34 @@ public class ElasticSearchService {
         return res;
     }
 
+    public void bulkDocuments(MultipartFile file, String indexName) throws IOException {
+        String content = getFileContent(indexName, file);
+        List list = str2Json(content);
+        bulkDocuments(list, indexName);
+    }
+
+    public void bulkDocuments(List<? extends Map> sources, String indexName) throws IOException {
+        BulkRequest bulkRequest = new BulkRequest();
+        sources.stream().forEach(source ->{
+            IndexRequest request = new IndexRequest(indexName);
+            request.source(source);
+            request.opType(DocWriteRequest.OpType.CREATE);
+            bulkRequest.add(request);
+        });
+        bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL);
+        try (RestHighLevelClient highLevelClient = getHighLevelClient()) {
+            BulkResponse bulk = highLevelClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+            if(bulk.hasFailures()){
+                StringBuilder builder = new StringBuilder();
+                for (BulkItemResponse item : bulk.getItems()) {
+                    builder.append(item.getFailure().getCause().toString()).append("##");
+                }
+                log.warn("bulk操作失败："+builder.toString());
+                throw  new RuntimeException("批量操作失败，详情请查看日志");
+            }
+        }
+    }
+
     /**
      * 字段映射
      * @param indexName
@@ -342,6 +383,11 @@ public class ElasticSearchService {
             e.printStackTrace();
         }
         return resMappingArray;
+    }
+
+    private List<JsonObject> str2Json(String str){
+        List objList = JSON.parseObject(str, List.class);
+        return objList;
     }
 
 
